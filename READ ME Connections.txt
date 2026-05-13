@@ -1,0 +1,110 @@
+Our  project is Health Monitoring System where we measure user's bpm, IBI, Raw signal, Beat also we measure ECG signal,
+with the help of using 2 sensors
+
+In our project first we measure bpm, IBI, Signal, Beat simultaneously we measure ECG also,
+we have power control switch which is used to control system is ON or OFF so we can only measure when system is ON.
+and we have reset button for data to be reset, so it would be reset values for new user.
+
+Hardware Components we are using : 
+1. ESP-8266 Wifi module[NODE MCU]
+2. Pulse Sensor
+3. AD8232 ECG Sensor
+4. ADS1115 ADC Module
+5. Toggle Switch to control power
+6. Tactile Switch to reset function
+7. LEDs along with power button and reset button
+8. Resistors of value : 330 ohm, 10k ohm.
+
+
+=================================================================================================================================
+
+
+
+NOW LET ME TELL YOU ALL CONNECTIONS WHAT EXACTLY I HAVE SHOULDERED ON ZERO PCB:
+------>
+We have connections in this way:
+
+1) MCU ----> Switch -----> LED (POWER CONTROL)
+2) MCU ----> Switch -----> LED (RESET)
+3) MCU ----> Pulse Rate Sensor 
+4) ADS1115 ADC MODULE + MCU + ECG Sensor
+
+
+LET'S SEE ONE BY ONE:
+
+1)MCU ----> Switch -----> LED : THIS CONNECTIONS USE FOR CONTROLLING POWER SUPPLY TO RUN WHOLE SYSTEM.
+
+MCU to Switch
+D7 ---------> SW 0
+GND <-------- SW -
+
+MCU to LED
+D8 ----(Rtr 330 ohm)-----> +ve
+GND <--------------------- -ve
+-----------------------------------------------------------------------------------------------------------------------------------
+
+
+2) MCU ----> Switch -----> LED : THIS CONNECTIONS USE FOR RESET THE PREVIOUS READ VALUE SO THAT NEXT PATIENT WILL USE SYSTEM.
+
+MCU to Switch
+D3 -------->Switch(1st leg)
+GND <------ Switch(4th leg)
+
+MCU to LED
+D2 ----->(Rtr 10k ohm) -----> LED's +ve
+GND <------------------------ LED's -ve
+-----------------------------------------------------------------------------------------------------------------------------------
+
+
+3) MCU ----> Pulse Rate Sensor : THIS CONNECTIONS USE FOR MEASURING THE PULSE RATE OF USER, Here we show 4 paramters using this sensor.
+
+MCU to Pulse Rate Sensor
+
+GND -------> White wire
+3V  -------> Grey wire
+A0  -------> White wire
+-----------------------------------------------------------------------------------------------------------------------------------
+
+
+4) ADS1115 ADC MODULE + MCU + ECG Sensor  : 
+
+   I)ADS1115 ADC MODULE <-----> MCU:  // THIS CONNECTIONS USE FOR EXTERNAL ADC MODULE BECAUSE OUR ESP MCU HAD ONLY SINGLE ANALOG PIN 
+                                      WHICH IS USED BY PULSE SENSOR  SO WE NEED TO ARRANGE EXTERNAL MODULE FOR ECG SENSOR.
+           VDD ------------> 3.3V (Grey wire on hardware)
+           GND ------------> GND  (Orange wire on hardware)
+           ADDR -----------> GND  (Orange wire on hardware)
+           SDA ------------> D4   (Purple wire on hardware)
+           SCL ------------> D1   (Red wire on hardware)
+
+      II)ECG SENSOR <----------->ADS1115:
+           GND    -----------> GND
+           3.3V   -----------> 3.3V / VDD
+           OUTPUT -----------> A0
+
+      III)ECG SENSOR <---------> MCU:
+              L0- <------------> D2
+
+=======================================================================================================================================
+
+our currently used pins:
+Pin        Used For
+D7 (GPIO13) Power switch
+D8 (GPIO15) Power LED (Red)
+D6 (GPIO12) Buzzer + Green LED
+D3 (GPIO0)  Reset switch
+D2 (GPIO4)  Reset LED (Blue)
+A0          Pulse sensor (analog input)
+3V          Power for pulse sensor
+GND         Ground for everything
+
+
+
+
+YOUR FREE PINS ARE :
+Pin         Available?
+D0 (GPIO16) FREE
+D1 (GPIO5)  FREE
+D4 (GPIO2)  FREE
+D5 (GPIO14) FREE (temp sensor removed)
+RX (GPIO3)  FREE (but avoid if possible)
+TX (GPIO1)  FREE (but avoid if possible)
