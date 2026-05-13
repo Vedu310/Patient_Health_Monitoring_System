@@ -1,2 +1,8 @@
 # Patient_Health_Monitoring_System
-A full-stack IoT health monitoring solution using ESP8266 + ADS1115 (ECG) + pulse sensor. Streams real-time BPM, IBI, ECG waveform data over MQTT to a live web dashboard. Includes AI-based health advisor, PDF report generation, and remote device configuration (WiFi/topic) via MQTT. Built with Arduino C++, HTML/CSS/JS, and Spring Boot architecture.
+IoT Based Smart Patient Health Monitoring System
+Developed a real-time IoT healthcare monitoring system using ESP8266 NodeMCU.
+Implemented ECG monitoring using AD8232 ECG sensor module.
+Integrated ADS1115 16-bit ADC for high-resolution ECG acquisition.
+Designed MQTT-based wireless communication for remote monitoring.
+Implemented pulse sensor-based BPM monitoring and alert indication system.
+Worked with I2C communication, sensor interfacing, and real-time data visualization.
