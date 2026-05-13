@@ -1,0 +1,621 @@
+// =============================================================================================================
+// COMPLETE HEALTH MONITORING SYSTEM WITH MQTT
+// Sends ALL data to a SINGLE topic for easy dashboard subscription
+// =============================================================================================================
+
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
+
+// ============================================================
+// WiFi AND MQTT CONFIGURATION
+// ============================================================
+#define WIFI_SSID     "Galaxy M53 5G 7248"       // Replace with your WiFi name
+#define WIFI_PASSWORD "123456789"   // Replace with your WiFi password
+
+// Public MQTT Broker (HiveMQ - free)
+#define MQTT_BROKER   "broker.hivemq.com"    // Public MQTT broker address
+#define MQTT_PORT     1883                    // Default MQTT port
+
+// SINGLE TOPIC FOR ALL DATA (Dashboard subscribes to this ONE topic)
+#define MQTT_TOPIC_ALL   "health/patient/all"     // Everything goes here
+
+// ============================================================
+// PIN DEFINITIONS
+// ============================================================
+#define POWER_SWITCH_PIN   13   // D7 - Toggle switch (LOW = ON)
+#define POWER_LED_PIN      15   // D8 - Red LED (indicates power on)
+#define PULSE_SENSOR_PIN   A0   // A0 - Pulse sensor analog input
+#define BUZZER_GREEN_PIN   12   // D6 - Buzzer (LOW = ON, HIGH = OFF)
+#define RESET_BUTTON_PIN   0    // D3 - Reset button (LOW = pressed)
+#define RESET_LED_PIN      4    // D2 - Blue LED (reset indicator)
+
+// ECG Sensor Pins
+#define ECG_I2C_SDA        2    // D4 - I2C Data line for ADS1115
+#define ECG_I2C_SCL        5    // D1 - I2C Clock line for ADS1115
+#define ECG_LO_MINUS_PIN   2    // D4 - Lead-off detection (shared with SDA)
+
+// ============================================================
+// OBJECTS
+// ============================================================
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+Adafruit_ADS1115 ads;
+
+// ============================================================
+// SYSTEM STATE VARIABLES
+// ============================================================
+bool systemPowered = false;
+bool pulseMeasurementDone = false;
+bool mqttConnected = false;
+unsigned long lastConnectionAttempt = 0;  // For rate limiting reconnection attempts
+
+// ============================================================
+// PULSE SENSOR VARIABLES
+// ============================================================
+int heartRate = 0;
+int lastIbi = 0;
+unsigned long lastBeatTime = 0;
+unsigned long lastReadingTime = 0;
+int lastSentHeartRate = 0;          // Track last sent value to MQTT
+
+// Pulse Averaging
+const int numReadings = 10;
+int readings[numReadings];
+int readIndex = 0;
+int total = 0;
+
+// ============================================================
+// BUZZER VARIABLES
+// ============================================================
+unsigned long buzzerStartTime = 0;
+bool buzzerActive = false;
+
+// ============================================================
+// ECG SENSOR VARIABLES
+// ============================================================
+unsigned long lastECGTime = 0;
+int samplesToAverage = 3;
+int sampleBuffer[3];
+int bufferIndex = 0;
+long sum = 0;
+unsigned long lastECGSendTime = 0;  // Throttle ECG sending
+
+
+// ============================================================
+// SECTION 1: WiFi AND MQTT CONNECTION FUNCTIONS (FIXED)
+// ============================================================
+
+void connectToWiFi() 
+{
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(WIFI_SSID);
+  
+  WiFi.mode(WIFI_STA);  // Set to station mode
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30)  // Increased attempts
+  {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) 
+  {
+    Serial.println();
+    Serial.println("WiFi Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Signal Strength (RSSI): ");
+    Serial.println(WiFi.RSSI());
+  } 
+  else 
+  {
+    Serial.println();
+    Serial.println("WiFi Connection Failed!");
+  }
+}
+
+void connectToMQTT() 
+{
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Cannot connect to MQTT - WiFi not connected");
+    return;
+  }
+  
+  Serial.print("Connecting to MQTT Broker: ");
+  Serial.println(MQTT_BROKER);
+  
+  // Set server before attempting connection
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  
+  // Create a unique client ID
+  String clientId = "ESP8266_Health_" + String(ESP.getChipId());
+  
+  int attempts = 0;
+  const int maxAttempts = 8;  // Increased max attempts
+  
+  while (!mqttClient.connected() && attempts < maxAttempts) 
+  {
+    Serial.print("Attempt ");
+    Serial.print(attempts + 1);
+    Serial.print("/");
+    Serial.print(maxAttempts);
+    Serial.print("... ");
+    
+    // Attempt connection
+    if (mqttClient.connect(clientId.c_str())) 
+    {
+      Serial.println("CONNECTED!");
+      mqttConnected = true;
+      
+      // Send online status
+      sendMQTTMessage("STATUS:System Online");
+      Serial.println("✓ MQTT connection established successfully");
+      return;  // Exit function on success
+    } 
+    else 
+    {
+      int state = mqttClient.state();
+      Serial.print("Failed (rc=");
+      Serial.print(state);
+      Serial.print(") ");
+      
+      // Print meaningful error messages
+      if (state == -2) {
+        Serial.println("- Network error (check WiFi)");
+      } else if (state == -3) {
+        Serial.println("- MQTT connection rejected");
+      } else if (state == -4) {
+        Serial.println("- MQTT timeout");
+      } else if (state == 1) {
+        Serial.println("- Bad protocol version");
+      } else if (state == 2) {
+        Serial.println("- Client ID rejected");
+      } else if (state == 3) {
+        Serial.println("- Server unavailable");
+      } else if (state == 4) {
+        Serial.println("- Bad credentials");
+      } else if (state == 5) {
+        Serial.println("- Not authorized");
+      } else {
+        Serial.println();
+      }
+      
+      // Wait before next attempt
+      Serial.print("  Retrying in 3 seconds...");
+      delay(3000);
+      Serial.println();
+      attempts++;
+      
+      // Ensure WiFi is still connected
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi connection lost! Reconnecting...");
+        connectToWiFi();
+        delay(1000);
+      }
+    }
+  }
+  
+  if (!mqttConnected) 
+  {
+    Serial.println("MQTT Connection Failed after " + String(maxAttempts) + " attempts!");
+    Serial.println("Will retry in loop()...");
+  }
+}
+
+void maintainMQTTConnection() 
+{
+  // Limit reconnection attempts to avoid flooding
+  unsigned long now = millis();
+  
+  // Check WiFi first
+  if (WiFi.status() != WL_CONNECTED) 
+  {
+    if (now - lastConnectionAttempt > 10000) {  // Wait 10 seconds before retry
+      Serial.println("WiFi lost! Reconnecting...");
+      connectToWiFi();
+      lastConnectionAttempt = now;
+    }
+    return;
+  }
+  
+  // Check and reconnect MQTT if needed (with rate limiting)
+  if (!mqttClient.connected() && WiFi.status() == WL_CONNECTED) 
+  {
+    if (now - lastConnectionAttempt > 5000) {  // Wait 5 seconds between MQTT reconnection attempts
+      Serial.println("MQTT lost! Attempting to reconnect...");
+      mqttConnected = false;
+      connectToMQTT();
+      lastConnectionAttempt = now;
+    }
+  }
+  
+  // Always process MQTT messages if connected
+  if (mqttClient.connected()) 
+  {
+    mqttClient.loop();
+  }
+}
+
+
+// ============================================================
+// SECTION 2: MQTT SEND FUNCTION (Sends to SINGLE topic)
+// ============================================================
+
+// This function sends ALL data to the SAME topic
+// Format: TYPE:VALUE1,VALUE2
+// Examples:
+//   "PULSE:72,833"      -> BPM=72, IBI=833
+//   "ECG:11234"         -> ECG raw value
+//   "STATUS:System ON"  -> Status message
+void sendMQTTMessage(String message) 
+{
+  if (mqttClient.connected()) 
+  {
+    if (mqttClient.publish(MQTT_TOPIC_ALL, message.c_str())) {
+      Serial.print("[MQTT Sent] ");
+      Serial.println(message);
+    } else {
+      Serial.print("[MQTT Failed] Could not publish: ");
+      Serial.println(message);
+    }
+  }
+  else
+  {
+    // Don't spam console for every failed attempt
+    static unsigned long lastWarning = 0;
+    if (millis() - lastWarning > 10000) {
+      Serial.println("[MQTT] Not connected - message not sent");
+      lastWarning = millis();
+    }
+  }
+}
+
+
+// ============================================================
+// SECTION 3: HARDWARE INITIALIZATION
+// ============================================================
+
+void initializeHardware() 
+{
+  pinMode(POWER_SWITCH_PIN, INPUT_PULLUP);
+  pinMode(POWER_LED_PIN, OUTPUT);
+  pinMode(PULSE_SENSOR_PIN, INPUT);
+  pinMode(BUZZER_GREEN_PIN, OUTPUT);
+  pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RESET_LED_PIN, OUTPUT);
+  
+  digitalWrite(POWER_LED_PIN, LOW);
+  digitalWrite(BUZZER_GREEN_PIN, HIGH);  // HIGH = OFF for active-low
+  digitalWrite(RESET_LED_PIN, LOW);
+  
+  // Initialize I2C for ECG
+  Wire.begin(ECG_I2C_SDA, ECG_I2C_SCL);
+  
+  // Initialize ADS1115
+  if (!ads.begin(0x48)) 
+  {
+    Serial.println("ERROR: ADS1115 not found!");
+    sendMQTTMessage("STATUS:ECG Sensor Error - Not Found");
+  } 
+  else 
+  {
+    ads.setGain(GAIN_TWOTHIRDS);
+    ads.setDataRate(RATE_ADS1115_860SPS);
+    Serial.println("ECG Sensor initialized");
+  }
+  
+  pinMode(ECG_LO_MINUS_PIN, INPUT_PULLUP);
+  
+  // Initialize pulse averaging array
+  for (int i = 0; i < numReadings; i++) 
+  {
+    readings[i] = 0;
+  }
+}
+
+
+// ============================================================
+// SECTION 4: BUZZER FUNCTIONS
+// ============================================================
+
+void beepBuzzer(int durationMs) 
+{
+  digitalWrite(BUZZER_GREEN_PIN, LOW);
+  delay(durationMs);
+  digitalWrite(BUZZER_GREEN_PIN, HIGH);
+}
+
+
+void startBuzzerBeep() 
+{
+  digitalWrite(BUZZER_GREEN_PIN, LOW);
+  buzzerActive = true;
+  buzzerStartTime = millis();
+}
+
+
+void handleBuzzerTiming() 
+{
+  if (buzzerActive && (millis() - buzzerStartTime >= 300)) 
+  {
+    digitalWrite(BUZZER_GREEN_PIN, HIGH);
+    buzzerActive = false;
+  }
+}
+
+
+// ============================================================
+// SECTION 5: PULSE SENSOR FUNCTIONS (UNCHANGED)
+// ============================================================
+
+void readPulseSensor() 
+{
+  if (millis() - lastReadingTime >= 50) 
+  {
+    lastReadingTime = millis();
+    
+    int pulseValue = analogRead(PULSE_SENSOR_PIN);
+    
+    static int lastPulseValue = 0;
+    static bool waitingForFall = false;
+    
+    if (pulseValue > 550 && !waitingForFall && pulseValue > lastPulseValue) 
+    {
+      unsigned long now = millis();
+      
+      if (lastBeatTime > 0) 
+      {
+        unsigned long interval = now - lastBeatTime;
+        
+        if (interval > 300 && interval < 1500) 
+        {
+          int instantHR = 60000 / interval;
+          lastIbi = interval;
+          
+          total = total - readings[readIndex];
+          readings[readIndex] = instantHR;
+          total = total + readings[readIndex];
+          readIndex = (readIndex + 1) % numReadings;
+          heartRate = total / numReadings;
+          
+          // Only send if heart rate changed
+          if (heartRate != lastSentHeartRate && heartRate > 40 && heartRate < 200) 
+          {
+            lastSentHeartRate = heartRate;
+            
+            // Print to Serial
+            Serial.print("[PULSE] BPM: ");
+            Serial.print(heartRate);
+            Serial.print(", IBI: ");
+            Serial.print(lastIbi);
+            Serial.println(" ms");
+            
+            // SEND TO MQTT (SINGLE TOPIC) - Format: PULSE:BPM,IBI
+            String mqttMessage = "PULSE:" + String(heartRate) + "," + String(lastIbi);
+            sendMQTTMessage(mqttMessage);
+            
+            // Buzzer feedback
+            startBuzzerBeep();
+            
+            // Mark pulse measurement as done
+            if (!pulseMeasurementDone) 
+            {
+              pulseMeasurementDone = true;
+              Serial.println("\n>>> PULSE MEASUREMENT DONE <<<");
+              sendMQTTMessage("STATUS:Pulse measurement complete, ECG active");
+            }
+          }
+        }
+      }
+      
+      lastBeatTime = now;
+      waitingForFall = true;
+    }
+    
+    if (pulseValue < 500 && waitingForFall) 
+    {
+      waitingForFall = false;
+    }
+    
+    lastPulseValue = pulseValue;
+    
+    if (millis() - lastBeatTime > 5000 && heartRate != 0) 
+    {
+      heartRate = 0;
+      lastSentHeartRate = 0;
+      Serial.println("[PULSE] No finger detected");
+      sendMQTTMessage("STATUS:No finger on pulse sensor");
+    }
+  }
+}
+
+
+// ============================================================
+// SECTION 6: ECG SENSOR FUNCTIONS (UNCHANGED)
+// ============================================================
+
+void readECGSensor() 
+{
+  // Check electrodes (optional - just for warning)
+  int leadsOff = digitalRead(ECG_LO_MINUS_PIN);
+  
+  if (leadsOff == HIGH) 
+  {
+    static unsigned long lastWarning = 0;
+    if (millis() - lastWarning > 5000) 
+    {
+      Serial.println("[ECG] Electrodes not connected!");
+      sendMQTTMessage("STATUS:ECG Electrodes disconnected");
+      lastWarning = millis();
+    }
+  }
+  
+  // Read ECG at 100Hz
+  if (millis() - lastECGTime >= 10) 
+  {
+    lastECGTime = millis();
+    
+    int16_t rawValue = ads.readADC_SingleEnded(0);
+    
+    // Apply smoothing filter
+    sum = sum - sampleBuffer[bufferIndex];
+    sampleBuffer[bufferIndex] = rawValue;
+    sum = sum + rawValue;
+    bufferIndex = (bufferIndex + 1) % samplesToAverage;
+    int smoothedValue = sum / samplesToAverage;
+    
+    // Throttle ECG sending to avoid flooding (send every 50ms = 20Hz)
+    // This gives smooth waveform without overloading the broker
+    if (millis() - lastECGSendTime >= 50 && pulseMeasurementDone) 
+    {
+      lastECGSendTime = millis();
+      
+      // SEND TO MQTT (SINGLE TOPIC) - Format: ECG:value
+      String mqttMessage = "ECG:" + String(smoothedValue);
+      sendMQTTMessage(mqttMessage);
+    }
+  }
+}
+
+
+// ============================================================
+// SECTION 7: POWER AND RESET FUNCTIONS (UNCHANGED)
+// ============================================================
+
+void handlePowerControl() 
+{
+  int switchState = digitalRead(POWER_SWITCH_PIN);
+  
+  if (switchState == LOW && !systemPowered) 
+  {
+    systemPowered = true;
+    pulseMeasurementDone = false;
+    digitalWrite(POWER_LED_PIN, HIGH);
+    
+    Serial.println("\n>>> SYSTEM POWERED ON <<<");
+    Serial.println("Place finger on PULSE sensor to begin\n");
+    
+    beepBuzzer(200);
+    sendMQTTMessage("STATUS:System Powered ON - Ready for pulse measurement");
+  }
+  else if (switchState == HIGH && systemPowered) 
+  {
+    systemPowered = false;
+    digitalWrite(POWER_LED_PIN, LOW);
+    digitalWrite(BUZZER_GREEN_PIN, HIGH);
+    digitalWrite(RESET_LED_PIN, LOW);
+    
+    buzzerActive = false;
+    heartRate = 0;
+    pulseMeasurementDone = false;
+    
+    Serial.println("\n>>> SYSTEM POWERED OFF <<<");
+    sendMQTTMessage("STATUS:System Powered OFF");
+  }
+}
+
+
+void handleResetButton() 
+{
+  static int lastResetState = HIGH;
+  int resetState = digitalRead(RESET_BUTTON_PIN);
+  
+  if (resetState == LOW && lastResetState == HIGH && systemPowered) 
+  {
+    delay(50);
+    
+    if (digitalRead(RESET_BUTTON_PIN) == LOW) 
+    {
+      heartRate = 0;
+      lastSentHeartRate = 0;
+      pulseMeasurementDone = false;
+      
+      for (int i = 0; i < numReadings; i++) 
+      {
+        readings[i] = 0;
+      }
+      readIndex = 0;
+      total = 0;
+      lastBeatTime = millis();
+      
+      digitalWrite(RESET_LED_PIN, HIGH);
+      delay(300);
+      digitalWrite(RESET_LED_PIN, LOW);
+      
+      beepBuzzer(100);
+      
+      Serial.println("\n*** DATA RESET ***");
+      Serial.println("Ready for next patient\n");
+      
+      sendMQTTMessage("STATUS:Data Reset - Ready for next patient");
+    }
+  }
+  
+  lastResetState = resetState;
+}
+
+
+// ============================================================
+// SECTION 8: SETUP FUNCTION (UPDATED with small delay)
+// ============================================================
+
+void setup() 
+{
+  Serial.begin(74880);
+  delay(1000);
+  
+  Serial.println("=========================================");
+  Serial.println("HEALTH MONITORING SYSTEM WITH MQTT");
+  Serial.println("Sending ALL data to SINGLE topic:");
+  Serial.println(MQTT_TOPIC_ALL);
+  Serial.println("=========================================\n");
+  
+  initializeHardware();
+  connectToWiFi();
+  
+  // Add small delay to ensure WiFi is stable before MQTT connection
+  delay(2000);
+  
+  connectToMQTT();
+  
+  Serial.println("\n=========================================");
+  Serial.println("SYSTEM READY");
+  Serial.println("Flip power switch ON to begin");
+  Serial.println("=========================================\n");
+  
+  beepBuzzer(100);
+}
+
+
+// ============================================================
+// SECTION 9: MAIN LOOP (UNCHANGED)
+// ============================================================
+
+void loop() 
+{
+  maintainMQTTConnection();
+  handlePowerControl();
+  handleResetButton();
+  handleBuzzerTiming();
+  
+  if (systemPowered) 
+  {
+    readPulseSensor();
+    
+    if (pulseMeasurementDone) 
+    {
+      readECGSensor();
+    }
+  }
+  
+  delay(10);
+}
+
+// ============================================================
+// END OF CODE
+// ============================================================

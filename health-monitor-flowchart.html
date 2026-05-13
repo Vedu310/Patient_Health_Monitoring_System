@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patient Health Monitor System – Flowchart</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #060d1a;
+    --panel: #0b1628;
+    --border: #0e2a4a;
+    --cyan: #00e5ff;
+    --green: #00ff88;
+    --amber: #ffb300;
+    --red: #ff3860;
+    --purple: #b44fff;
+    --text: #c8e6ff;
+    --dim: #4a7090;
+    --glow-cyan: 0 0 12px #00e5ff88, 0 0 30px #00e5ff33;
+    --glow-green: 0 0 12px #00ff8888, 0 0 30px #00ff8833;
+    --glow-amber: 0 0 12px #ffb30088, 0 0 30px #ffb30033;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    text-align: center;
+    padding: 40px 20px 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(18px, 4vw, 36px);
+    font-weight: 900;
+    color: var(--cyan);
+    text-shadow: var(--glow-cyan);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: var(--dim);
+    letter-spacing: 3px;
+    margin-top: 8px;
+    text-transform: uppercase;
+  }
+
+  .divider {
+    width: 300px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    margin: 20px auto;
+  }
+
+  /* Main flowchart container */
+  .flow-wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px 20px 60px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* ── Node styles ── */
+  .node {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Stagger children */
+  .node:nth-child(1)  { animation-delay: 0.05s; }
+  .node:nth-child(2)  { animation-delay: 0.10s; }
+  .node:nth-child(3)  { animation-delay: 0.15s; }
+  .node:nth-child(4)  { animation-delay: 0.20s; }
+  .node:nth-child(5)  { animation-delay: 0.25s; }
+  .node:nth-child(6)  { animation-delay: 0.30s; }
+  .node:nth-child(7)  { animation-delay: 0.35s; }
+  .node:nth-child(8)  { animation-delay: 0.40s; }
+  .node:nth-child(9)  { animation-delay: 0.45s; }
+  .node:nth-child(10) { animation-delay: 0.50s; }
+  .node:nth-child(11) { animation-delay: 0.55s; }
+  .node:nth-child(12) { animation-delay: 0.60s; }
+
+  .box {
+    border: 1.5px solid;
+    padding: 14px 28px;
+    border-radius: 6px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    line-height: 1.5;
+    background: var(--panel);
+    width: 100%;
+    max-width: 560px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: default;
+  }
+
+  .box:hover {
+    transform: scale(1.02);
+  }
+
+  .box .label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    opacity: 0.7;
+  }
+
+  .box .main-text {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .box .sub-text {
+    font-size: 11px;
+    opacity: 0.65;
+    margin-top: 4px;
+  }
+
+  /* Colors */
+  .cyan  { border-color: var(--cyan);   color: var(--cyan);   box-shadow: var(--glow-cyan); }
+  .green { border-color: var(--green);  color: var(--green);  box-shadow: var(--glow-green); }
+  .amber { border-color: var(--amber);  color: var(--amber);  box-shadow: var(--glow-amber); }
+  .red   { border-color: var(--red);    color: var(--red);    box-shadow: 0 0 12px #ff386088; }
+  .purple{ border-color: var(--purple); color: var(--purple); box-shadow: 0 0 12px #b44fff88; }
+
+  /* Terminal / Start-End pill */
+  .terminal .box {
+    border-radius: 50px;
+    padding: 16px 40px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 15px;
+    letter-spacing: 4px;
+    font-weight: 700;
+  }
+
+  /* Diamond decision */
+  .diamond-wrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+  }
+
+  .diamond {
+    width: 200px;
+    height: 200px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .diamond-inner {
+    width: 160px;
+    height: 160px;
+    background: var(--panel);
+    border: 1.5px solid var(--amber);
+    box-shadow: 0 0 12px #ffb30088;
+    transform: rotate(45deg);
+    position: absolute;
+  }
+
+  .diamond-text {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    color: var(--amber);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 1.5;
+    padding: 0 10px;
+  }
+
+  /* Decision branches */
+  .branches {
+    width: 100%;
+    max-width: 900px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    position: relative;
+  }
+
+  .branch-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .branch-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 4px 16px;
+    border-radius: 20px;
+    margin-bottom: 4px;
+  }
+
+  .yes-label { background: rgba(0,255,136,0.12); color: var(--green); border: 1px solid var(--green); }
+  .no-label  { background: rgba(255,56,96,0.12);  color: var(--red);   border: 1px solid var(--red); }
+
+  /* Connector arrows */
+  .arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 44px;
+    position: relative;
+  }
+
+  .arrow::before {
+    content: '';
+    width: 2px;
+    flex: 1;
+    background: linear-gradient(180deg, var(--dim), var(--cyan));
+  }
+
+  .arrow::after {
+    content: '▼';
+    color: var(--cyan);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .arrow.green-arrow::before { background: linear-gradient(180deg, var(--dim), var(--green)); }
+  .arrow.green-arrow::after  { color: var(--green); }
+  .arrow.red-arrow::before   { background: linear-gradient(180deg, var(--dim), var(--red)); }
+  .arrow.red-arrow::after    { color: var(--red); }
+  .arrow.short { height: 28px; }
+
+  /* Multi-sensor grid inside a box */
+  .sensor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+    max-width: 560px;
+    width: 100%;
+  }
+
+  .sensor-chip {
+    background: rgba(0,229,255,0.06);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 4px;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--cyan);
+    animation: fadeIn 0.5s ease both;
+  }
+
+  .sensor-chip .icon { font-size: 18px; display: block; margin-bottom: 4px; }
+
+  /* Rec cards */
+  .rec-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    max-width: 700px;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .rec-card {
+    background: rgba(180,79,255,0.06);
+    border: 1px solid rgba(180,79,255,0.35);
+    border-radius: 6px;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--purple);
+  }
+
+  .rec-card .icon { font-size: 20px; margin-bottom: 5px; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    padding: 20px;
+    margin-top: 40px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 2px;
+    border: 1.5px solid;
+  }
+
+  /* pulse animation on START */
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 8px var(--cyan); }
+    50%       { box-shadow: 0 0 24px var(--cyan), 0 0 48px var(--cyan)44; }
+  }
+
+  .pulse { animation: pulse-border 2s ease-in-out infinite; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .sensor-grid { grid-template-columns: repeat(2, 1fr); }
+    .rec-grid    { grid-template-columns: repeat(2, 1fr); }
+    .branches    { grid-template-columns: 1fr; }
+    .branch-col:last-child { margin-top: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">Patient Health Monitor System</div>
+  <div class="subtitle">System Architecture Flowchart &nbsp;|&nbsp; Embedded + Java</div>
+  <div class="divider"></div>
+</header>
+
+<div class="flow-wrap">
+
+  <!-- START -->
+  <div class="node terminal">
+    <div class="box cyan pulse">
+      <div class="main-text">⬡ START</div>
+      <div class="sub-text">System Boot / Patient Registration</div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- HARDWARE LAYER -->
+  <div class="node">
+    <div class="box cyan">
+      <div class="label">Layer 1 · Hardware / Embedded</div>
+      <div class="main-text">Blood Sample Collection & Sensor Initialization</div>
+      <div class="sub-text">Arduino / ESP32 / STM32 — Sensor array powered on</div>
+    </div>
+  </div>
+
+  <!-- Sensor chips -->
+  <div class="sensor-grid" style="animation-delay:0.3s">
+    <div class="sensor-chip" style="animation-delay:0.30s"><span class="icon">🩸</span>Blood Glucose</div>
+    <div class="sensor-chip" style="animation-delay:0.35s"><span class="icon">💓</span>Blood Pressure</div>
+    <div class="sensor-chip" style="animation-delay:0.40s"><span class="icon">🧪</span>Calcium / Electrolytes</div>
+    <div class="sensor-chip" style="animation-delay:0.45s"><span class="icon">❤️</span>Heart Rate / SpO2</div>
+    <div class="sensor-chip" style="animation-delay:0.50s"><span class="icon">🌡️</span>Body Temperature</div>
+    <div class="sensor-chip" style="animation-delay:0.55s"><span class="icon">⚡</span>ECG Signal</div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- DATA TRANSMISSION -->
+  <div class="node">
+    <div class="box amber">
+      <div class="label">Layer 2 · Communication</div>
+      <div class="main-text">Data Encoding & Transmission</div>
+      <div class="sub-text">JSON over MQTT (WiFi) &nbsp;|&nbsp; Serial/USB &nbsp;|&nbsp; Bluetooth</div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- JAVA BACKEND -->
+  <div class="node">
+    <div class="box green">
+      <div class="label">Layer 3 · Java Backend (Spring Boot)</div>
+      <div class="main-text">Receive, Parse & Validate Sensor Data</div>
+      <div class="sub-text">SensorDataService → HealthRecord model → JPA Repository → MySQL/PostgreSQL</div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- DECISION: Data Valid? -->
+  <div class="node diamond-wrap">
+    <div class="diamond">
+      <div class="diamond-inner"></div>
+      <div class="diamond-text">Data<br/>Valid?</div>
+    </div>
+  </div>
+
+  <!-- Branches -->
+  <div class="branches">
+    <!-- YES branch -->
+    <div class="branch-col">
+      <div class="branch-label yes-label">✓ YES — Valid</div>
+      <div class="arrow green-arrow short"></div>
+      <div class="box green" style="font-size:12px">
+        <div class="label">Layer 4A · Analysis</div>
+        <div class="main-text">Real-Time Parameter Analysis</div>
+        <div class="sub-text">Compare readings to normal ranges<br/>Flag anomalies via HealthAdvisor</div>
+      </div>
+    </div>
+
+    <!-- NO branch -->
+    <div class="branch-col">
+      <div class="branch-label no-label">✗ NO — Error</div>
+      <div class="arrow red-arrow short"></div>
+      <div class="box red" style="font-size:12px">
+        <div class="label">Error Handling</div>
+        <div class="main-text">Log Error & Retry</div>
+        <div class="sub-text">Alert technician<br/>Re-request sensor reading</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- DECISION: Alert Needed? -->
+  <div class="node diamond-wrap">
+    <div class="diamond">
+      <div class="diamond-inner"></div>
+      <div class="diamond-text">Alert<br/>Needed?</div>
+    </div>
+  </div>
+
+  <!-- Alert branches -->
+  <div class="branches">
+    <div class="branch-col">
+      <div class="branch-label yes-label">✓ YES — Abnormal</div>
+      <div class="arrow red-arrow short"></div>
+      <div class="box red" style="font-size:12px">
+        <div class="label">Alert System</div>
+        <div class="main-text">🚨 Trigger Alerts</div>
+        <div class="sub-text">WebSocket push to dashboard<br/>SMS / Email to Doctor<br/>Buzzer / LED on hardware</div>
+      </div>
+    </div>
+    <div class="branch-col">
+      <div class="branch-label no-label">✓ Normal Range</div>
+      <div class="arrow green-arrow short"></div>
+      <div class="box green" style="font-size:12px">
+        <div class="label">Status</div>
+        <div class="main-text">✅ All Parameters Normal</div>
+        <div class="sub-text">Log healthy record<br/>Continue monitoring cycle</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- DASHBOARD -->
+  <div class="node">
+    <div class="box cyan">
+      <div class="label">Layer 5 · Real-Time Dashboard</div>
+      <div class="main-text">Live Data Visualization</div>
+      <div class="sub-text">JavaFX / Web UI — Line charts, gauges, status indicators, alert panel, patient history</div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- ML PREDICTION -->
+  <div class="node">
+    <div class="box amber">
+      <div class="label">Layer 6 · AI / ML Engine</div>
+      <div class="main-text">Predictive Health Analysis</div>
+      <div class="sub-text">Trend analysis on historical data · Risk score for Diabetes, Hypertension, Hypocalcemia<br/>ONNX model inference in Java</div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- RECOMMENDATIONS -->
+  <div class="node">
+    <div class="box purple">
+      <div class="label">Layer 7 · Health Advisor</div>
+      <div class="main-text">Personalized Recommendations & Precautions</div>
+    </div>
+  </div>
+
+  <div class="rec-grid">
+    <div class="rec-card"><div class="icon">🥗</div>Diet & Nutrition Tips</div>
+    <div class="rec-card"><div class="icon">🏃</div>Exercise Guidance</div>
+    <div class="rec-card"><div class="icon">💊</div>Supplement Advice</div>
+    <div class="rec-card"><div class="icon">😴</div>Rest & Recovery</div>
+    <div class="rec-card"><div class="icon">🩺</div>Doctor Consultation</div>
+    <div class="rec-card"><div class="icon">📋</div>PDF Health Report</div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STORE & LOOP -->
+  <div class="node">
+    <div class="box green">
+      <div class="label">Layer 8 · Storage & Loop</div>
+      <div class="main-text">Save Record to Database</div>
+      <div class="sub-text">MySQL / PostgreSQL &nbsp;·&nbsp; Patient history retained &nbsp;·&nbsp; Return to monitoring cycle</div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- DECISION: Continue? -->
+  <div class="node diamond-wrap">
+    <div class="diamond">
+      <div class="diamond-inner"></div>
+      <div class="diamond-text">Continue<br/>Monitoring?</div>
+    </div>
+  </div>
+
+  <!-- Continue branches -->
+  <div class="branches">
+    <div class="branch-col">
+      <div class="branch-label yes-label">✓ YES</div>
+      <div class="arrow green-arrow short"></div>
+      <div class="box green" style="font-size:12px;max-width:300px">
+        <div class="main-text">🔄 Next Sampling Cycle</div>
+        <div class="sub-text">Loop back to sensor data collection<br/>(configurable interval: 1s – 5min)</div>
+      </div>
+    </div>
+    <div class="branch-col">
+      <div class="branch-label no-label">✗ NO — Session End</div>
+      <div class="arrow red-arrow short"></div>
+      <div class="box red" style="font-size:12px;max-width:300px">
+        <div class="main-text">📊 Generate Final Report</div>
+        <div class="sub-text">Export PDF summary<br/>Archive session data</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- END -->
+  <div class="node terminal">
+    <div class="box red">
+      <div class="main-text">⬡ END</div>
+      <div class="sub-text">Session Closed / System Standby</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="border-color:#00e5ff;background:rgba(0,229,255,0.15)"></div><span style="color:#00e5ff">Hardware & I/O</span></div>
+  <div class="legend-item"><div class="legend-dot" style="border-color:#00ff88;background:rgba(0,255,136,0.15)"></div><span style="color:#00ff88">Java Backend & Normal Flow</span></div>
+  <div class="legend-item"><div class="legend-dot" style="border-color:#ffb300;background:rgba(255,179,0,0.15)"></div><span style="color:#ffb300">Decision / AI Layer</span></div>
+  <div class="legend-item"><div class="legend-dot" style="border-color:#ff3860;background:rgba(255,56,96,0.15)"></div><span style="color:#ff3860">Alerts & Errors</span></div>
+  <div class="legend-item"><div class="legend-dot" style="border-color:#b44fff;background:rgba(180,79,255,0.15)"></div><span style="color:#b44fff">Recommendations</span></div>
+</div>
+
+</body>
+</html>

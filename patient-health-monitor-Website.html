@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patient Health Monitoring System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* [ALL YOUR EXISTING CSS STYLES REMAIN EXACTLY THE SAME - omitted for brevity but keep your original CSS] */
+:root {
+  --bg:#060d1a;--panel:#0b1628;--panel2:#0d1e35;
+  --border:#0e2a4a;--border2:#1a3a5c;
+  --cyan:#00e5ff;--green:#00ff88;--amber:#ffb300;--red:#ff3860;--purple:#b44fff;
+  --text:#c8e6ff;--dim:#4a7090;
+  --glow-cyan:0 0 12px #00e5ff88,0 0 30px #00e5ff22;
+  --glow-green:0 0 12px #00ff8888;
+  --glow-red:0 0 12px #ff386088;
+  --glow-amber:0 0 12px #ffb30088;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#060d1a}::-webkit-scrollbar-thumb{background:#0e2a4a;border-radius:3px}
+.app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:64px 1fr;min-height:100vh;position:relative;z-index:1}
+.topbar{grid-column:1/-1;background:rgba(11,22,40,.97);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;backdrop-filter:blur(8px);position:sticky;top:0;z-index:100}
+.topbar-logo{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:900;color:var(--cyan);text-shadow:var(--glow-cyan);letter-spacing:3px;white-space:nowrap}
+.topbar-logo span{color:var(--green)}
+.topbar-div{width:1px;height:32px;background:var(--border2);margin:0 6px}
+.topbar-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+.sdot{width:8px;height:8px;border-radius:50%}
+.sdot.on{background:var(--green);box-shadow:var(--glow-green);animation:blink 2s infinite}
+.sdot.off{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.topbar-time{font-size:12px;color:var(--cyan);font-family:'Orbitron',sans-serif;min-width:80px;text-align:right}
+.btn-sm{background:rgba(0,229,255,.08);border:1px solid var(--border2);color:var(--cyan);padding:6px 14px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:1px}
+.btn-sm:hover{background:rgba(0,229,255,.18);border-color:var(--cyan)}
+.sidebar{background:rgba(11,22,40,.98);border-right:1px solid var(--border);padding:16px 0;overflow-y:auto}
+.nav-label{padding:6px 16px;font-size:10px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;margin-top:10px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;font-size:12px;letter-spacing:1px;cursor:pointer;transition:all .2s;border-left:3px solid transparent;color:var(--dim)}
+.nav-item:hover{background:rgba(0,229,255,.05);color:var(--text)}
+.nav-item.active{background:rgba(0,229,255,.08);border-left-color:var(--cyan);color:var(--cyan)}
+.nav-icon{width:18px;text-align:center;font-size:15px}
+.patient-chip{padding:12px 14px;margin:8px;background:var(--panel2);border:1px solid var(--border);border-radius:6px}
+.patient-chip-name{font-size:12px;color:var(--cyan);font-weight:700}
+.patient-chip-id{font-size:10px;color:var(--dim);margin-top:2px}
+.patient-chip-live{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--green);margin-top:6px}
+.main{overflow-y:auto;padding:20px}
+.page{display:none}.page.active{display:block}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.sec-title{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan);text-shadow:var(--glow-cyan);letter-spacing:2px}
+.sec-sub{font-size:11px;color:var(--dim);margin-top:3px}
+.card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px}
+.card-title{font-size:10px;letter-spacing:2.5px;color:var(--dim);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.card-title .dot{width:6px;height:6px;border-radius:50%}
+.vitals4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.vbox{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px 16px;position:relative;overflow:hidden;transition:all .3s}
+.vbox::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+.vbox.bpm::before{background:var(--cyan);box-shadow:var(--glow-cyan)}
+.vbox.ibi::before{background:var(--green);box-shadow:var(--glow-green)}
+.vbox.beat::before{background:var(--amber);box-shadow:var(--glow-amber)}
+.vbox.signal::before{background:var(--purple);box-shadow:0 0 12px #b44fff88}
+.vbox:hover{transform:translateY(-2px);border-color:var(--border2)}
+.vbox-label{font-size:9px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.vbox-val{font-family:'Orbitron',sans-serif;font-size:34px;font-weight:700;line-height:1;transition:color .3s}
+.vbox-unit{font-size:10px;color:var(--dim);margin-top:5px}
+.vbox-status{font-size:10px;margin-top:8px;color:var(--dim)}
+.vbox.bpm .vbox-val{color:var(--cyan)}
+.vbox.ibi .vbox-val{color:var(--green)}
+.vbox.beat .vbox-val{color:var(--amber)}
+.vbox.signal .vbox-val{color:var(--purple)}
+@keyframes heartbeat{0%,100%{transform:scale(1)}30%{transform:scale(1.12)}60%{transform:scale(0.95)}}
+.vbox.beat.flash .vbox-val{animation:heartbeat .3s ease}
+.waiting{display:flex;flex-direction:column;align-items:center;justify-content:center;height:140px;color:var(--dim);font-size:12px;gap:8px}
+.waiting .spin{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.form-label{font-size:10px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.form-input{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;transition:border-color .2s;width:100%}
+.form-input:focus{border-color:var(--cyan)}
+.btn-primary{background:rgba(0,229,255,.1);border:1px solid var(--cyan);color:var(--cyan);padding:10px 24px;border-radius:4px;font-family:'Orbitron',monospace;font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:2px;text-transform:uppercase}
+.btn-primary:hover{background:rgba(0,229,255,.22);box-shadow:var(--glow-cyan)}
+.btn-danger{background:rgba(255,56,96,.1);border:1px solid var(--red);color:var(--red);padding:10px 24px;border-radius:4px;font-family:'Orbitron',monospace;font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:2px}
+.btn-danger:hover{background:rgba(255,56,96,.22)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.log-box{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;padding:12px;height:280px;overflow-y:auto;font-size:11px;line-height:1.9}
+.log-entry{border-bottom:1px solid rgba(14,42,74,.4);padding:3px 0}
+.advisor-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px}
+.adv-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px}
+.adv-card-title{font-size:11px;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px;text-transform:uppercase}
+.adv-content{font-size:12px;line-height:1.9;color:var(--text)}
+.adv-content .item{padding:2px 0;border-bottom:1px solid rgba(14,42,74,.4)}
+.adv-content .item:last-child{border:none}
+.adv-note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+.no-data-msg{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px;padding:20px 0}
+.report-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.rep-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+.rep-box-label{font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:8px}
+.rep-box-val{font-family:'Orbitron',sans-serif;font-size:24px;font-weight:700}
+.rep-box-unit{font-size:10px;color:var(--dim);margin-top:4px}
+.toast-wrap{position:fixed;top:72px;right:18px;z-index:300;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--panel2);border:1px solid;border-radius:6px;padding:11px 15px;font-size:12px;max-width:310px;animation:toastIn .3s ease;pointer-events:auto}
+.toast.info{border-color:var(--cyan);color:var(--cyan)}
+.toast.ok{border-color:var(--green);color:var(--green)}
+.toast.warn{border-color:var(--amber);color:var(--amber)}
+.toast.err{border-color:var(--red);color:var(--red)}
+@keyframes toastIn{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+@keyframes glowAnim{0%,100%{text-shadow:0 0 8px #00e5ff44}50%{text-shadow:0 0 22px #00e5ffaa}}
+.glow{animation:glowAnim 3s infinite}
+@media(max-width:860px){
+  .vitals4{grid-template-columns:repeat(2,1fr)}
+  .advisor-grid{grid-template-columns:1fr 1fr}
+  .report-summary{grid-template-columns:repeat(2,1fr)}
+  .row2{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .app{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .vitals4{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="topbar">
+  <div class="topbar-logo">⚕ HEALTH<span>MONITOR</span></div>
+  <div class="topbar-div"></div>
+  <div class="topbar-status">
+    <div class="sdot off" id="mqttDot"></div>
+    <span id="mqttStatusTxt">MQTT: Disconnected</span>
+  </div>
+  <div class="topbar-div"></div>
+  <div class="topbar-status">
+    <div class="sdot off" id="sensorDot"></div>
+    <span id="sensorTxt">Sensor: Waiting</span>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-time" id="clock">--:--:--</div>
+    <button class="btn-sm" onclick="showPage('report',null)">📊 REPORT</button>
+  </div>
+</header>
+
+<nav class="sidebar">
+  <div class="patient-chip">
+    <div class="patient-chip-name">ESP8266 Device</div>
+    <div class="patient-chip-id">Topic: health/patient/all</div>
+    <div class="patient-chip-live" id="liveChip">⬤ Waiting for data...</div>
+  </div>
+  <div class="nav-label">Navigation</div>
+  <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</div>
+  <div class="nav-item" onclick="showPage('mqtt',this)"><span class="nav-icon">📡</span> MQTT Logger</div>
+  <div class="nav-item" onclick="showPage('advisor',this)"><span class="nav-icon">💊</span> Health Advisor</div>
+  <div class="nav-item" onclick="showPage('report',this)"><span class="nav-icon">📋</span> Report</div>
+  <div class="nav-label" style="margin-top:20px">MQTT Status</div>
+  <div style="padding:0 14px;font-size:11px;line-height:2;color:var(--dim)">
+    <div>Broker: <span style="color:var(--text)" id="sbBroker">—</span></div>
+    <div>Topic: <span style="color:var(--purple)" id="sbTopic">—</span></div>
+    <div>Rx Msgs: <span style="color:var(--green)" id="sbMsgCount">0</span></div>
+    <div>Last BPM: <span style="color:var(--cyan)" id="sbBpm">—</span></div>
+  </div>
+</nav>
+
+<main class="main">
+
+<div class="page active" id="page-dashboard">
+  <div class="sec-hdr">
+    <div>
+      <div class="sec-title glow">PATIENT MONITORING DASHBOARD</div>
+      <div class="sec-sub">Live data via MQTT · Topic: <span style="color:var(--purple)" id="dashTopic">health/patient/all</span></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-sm" onclick="showPage('mqtt',null)">⚙ CONFIG MQTT</button>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title"><div class="dot" style="background:var(--cyan)"></div>LIVE SENSOR VALUES — Real-time from ESP8266</div>
+    <div class="vitals4">
+      <div class="vbox bpm">
+        <div class="vbox-label">💓 BPM</div>
+        <div class="vbox-val" id="valBpm">—</div>
+        <div class="vbox-unit">beats / min</div>
+        <div class="vbox-status" id="statusBpm">Waiting for pulse...</div>
+      </div>
+      <div class="vbox ibi">
+        <div class="vbox-label">⏱ IBI</div>
+        <div class="vbox-val" id="valIbi">—</div>
+        <div class="vbox-unit">ms (inter-beat)</div>
+        <div class="vbox-status" id="statusIbi">Waiting for pulse...</div>
+      </div>
+      <div class="vbox beat">
+        <div class="vbox-label" id="beatLabel">❤ BEAT</div>
+        <div class="vbox-val" id="valBeat">0</div>
+        <div class="vbox-unit">total detected</div>
+        <div class="vbox-status" id="statusBeat">No beat yet</div>
+      </div>
+      <div class="vbox signal">
+        <div class="vbox-label">📶 SIGNAL</div>
+        <div class="vbox-val" id="valSignal">—</div>
+        <div class="vbox-unit">ECG raw (ADS1115)</div>
+        <div class="vbox-status" id="statusSignal">Waiting for ECG...</div>
+      </div>
+    </div>
+    <div id="statusMsgBar" style="font-size:11px;color:var(--amber);padding:8px 12px;background:rgba(255,179,0,.06);border:1px solid rgba(255,179,0,.2);border-radius:4px;display:none"></div>
+  </div>
+  <div class="card">
+    <div class="card-title"><div class="dot" style="background:var(--green)"></div>ECG WAVEFORM — ADS1115 via MQTT <span style="margin-left:auto;font-size:10px" id="ecgHz">0 pts/s</span></div>
+    <div id="ecgWaiting" class="waiting"><div class="spin"></div><span>Waiting for ECG data from ESP8266...<br><span style="font-size:10px;color:var(--border2)">Pulse measurement must complete first</span></span></div>
+    <canvas id="ecgCanvas" style="display:none;width:100%;height:120px"></canvas>
+  </div>
+</div>
+
+<div class="page" id="page-mqtt">
+  <div class="sec-hdr">
+    <div><div class="sec-title">MQTT LOGGER & ESP8266 CONFIG</div><div class="sec-sub">Configure WiFi & MQTT credentials for your device</div></div>
+  </div>
+
+  <div class="row2">
+    <div class="card">
+      <div class="card-title"><div class="dot" style="background:var(--cyan)"></div>WEBPAGE MQTT CONNECTION</div>
+      <div class="form-group">
+        <label class="form-label">MQTT Broker (WSS)</label>
+        <input class="form-input" id="cfgBroker" value="broker.hivemq.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Port (WebSocket)</label>
+        <input class="form-input" id="cfgPort" value="8884">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subscribe Topic</label>
+        <input class="form-input" id="cfgTopic" value="health/patient/all">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Client ID</label>
+        <input class="form-input" id="cfgClientId" readonly style="color:var(--dim)">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn-primary" id="btnConnect" onclick="mqttConnect()">▶ CONNECT</button>
+        <button class="btn-danger" id="btnDisconnect" onclick="mqttDisconnect()" style="display:none">■ DISCONNECT</button>
+      </div>
+      <div id="connStatus" style="margin-top:12px;font-size:11px;color:var(--dim)">Not connected</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><div class="dot" style="background:var(--amber)"></div>🔧 ESP8266 CREDENTIALS (Update Device)</div>
+      <div class="form-group">
+        <label class="form-label">NEW WiFi SSID</label>
+        <input class="form-input" id="wifiSsidInput" placeholder="Enter your WiFi name" value="Go Away!">
+      </div>
+      <div class="form-group">
+        <label class="form-label">NEW WiFi Password</label>
+        <input class="form-input" id="wifiPassInput" type="password" placeholder="Enter your WiFi password" value="Sharu19911991">
+      </div>
+      <div class="form-group">
+        <label class="form-label">MQTT Broker (for ESP8266)</label>
+        <input class="form-input" id="espBrokerInput" value="broker.hivemq.com">
+        <div style="font-size:9px; color:var(--dim);">Use broker.hivemq.com or your custom broker</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">MQTT Topic (ESP8266 publishes to)</label>
+        <input class="form-input" id="espTopicInput" value="health/patient/all">
+        <div style="font-size:9px; color:var(--dim);">Dashboard will subscribe to this same topic</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn-primary" onclick="generateESPCode()">📋 GENERATE CODE</button>
+        <button class="btn-sm" onclick="copyESPCode()">📄 COPY TO CLIPBOARD</button>
+      </div>
+      <div id="espCodeOutput" style="margin-top:12px; font-size:10px; background:#061020; padding:10px; border-radius:4px; border:1px solid var(--border); word-break:break-all; font-family:monospace; color:var(--green); display:none;"></div>
+      <div class="adv-note" style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
+        💡 <strong>How to update ESP8266:</strong><br>
+        1. Enter your NEW WiFi credentials above<br>
+        2. Click "GENERATE CODE"<br>
+        3. Copy the generated code<br>
+        4. Replace lines 19-25 in your Arduino sketch<br>
+        5. Re-upload to ESP8266<br>
+        6. Make sure your computer is on the SAME WiFi network<br>
+        7. Connect webpage using same broker/topic
+      </div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="card">
+      <div class="card-title"><div class="dot" style="background:var(--amber)"></div>CONNECTION INFO</div>
+      <div style="font-size:12px;line-height:2.2;color:var(--text)">
+        <div><span style="color:var(--dim)">STATUS:</span> <span id="infoStatus" style="color:var(--red)">Disconnected</span></div>
+        <div><span style="color:var(--dim)">BROKER:</span> <span id="infoBroker">—</span></div>
+        <div><span style="color:var(--dim)">TOPIC:</span> <span id="infoTopic" style="color:var(--purple)">—</span></div>
+        <div><span style="color:var(--dim)">MESSAGES RX:</span> <span id="infoMsgCount" style="color:var(--green)">0</span></div>
+        <div><span style="color:var(--dim)">LAST MSG:</span> <span id="infoLastMsg" style="color:var(--amber);font-size:11px;word-break:break-all">—</span></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="form-label" style="margin-bottom:6px">PUBLISH TEST MESSAGE</div>
+        <input class="form-input" id="pubMsg" value="STATUS:Test from dashboard" style="margin-bottom:8px">
+        <button class="btn-sm" onclick="mqttPublish()">📤 PUBLISH</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot" style="background:var(--purple)"></div>LIVE MESSAGE LOG <span style="margin-left:auto"><button class="btn-sm" onclick="clearLog()" style="padding:3px 10px;font-size:10px">CLEAR</button></span></div>
+      <div class="log-box" id="mqttLogBox">
+        <div style="color:var(--dim)">No messages yet. Connect to MQTT broker to start receiving data.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-advisor">
+  <div class="sec-hdr">
+    <div><div class="sec-title">HEALTH ADVISOR</div><div class="sec-sub">AI-based suggestions from live sensor readings</div></div>
+    <button class="btn-primary" onclick="updateAdvisor()">🔄 REFRESH</button>
+  </div>
+  <div id="advisorNoData" class="card" style="margin-bottom:14px">
+    <div class="no-data-msg">⚠️ No sensor data received yet. Connect MQTT and place finger on the pulse sensor first.</div>
+  </div>
+  <div id="advisorContent" style="display:none">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title"><div class="dot" style="background:var(--cyan)"></div>CURRENT READINGS</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:12px;line-height:2">
+        <div>BPM: <span style="color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:16px" id="advBpm">—</span></div>
+        <div>IBI: <span style="color:var(--green)" id="advIbi">—</span> ms</div>
+        <div>Beats: <span style="color:var(--amber)" id="advBeats">—</span></div>
+        <div>ECG Signal: <span style="color:var(--purple)" id="advSignal">—</span></div>
+        <div>Assessment: <span id="advAssessment" style="font-weight:700">—</span></div>
+      </div>
+    </div>
+    <div class="advisor-grid">
+      <div class="adv-card"><div class="adv-card-title" style="color:var(--green)">🏃 EXERCISE PLAN</div><div class="adv-content" id="advExercise">—</div></div>
+      <div class="adv-card"><div class="adv-card-title" style="color:var(--amber)">🥗 DIET PLAN</div><div class="adv-content" id="advDiet">—</div></div>
+      <div class="adv-card"><div class="adv-card-title" style="color:var(--red)">💊 MEDICINES</div><div class="adv-content" id="advMeds">—</div><div class="adv-note">⚠️ Consult a doctor before taking any medicine.</div></div>
+    </div>
+    <div class="row2">
+      <div class="adv-card card"><div class="adv-card-title" style="color:var(--purple)">🏥 HOSPITAL ADVICE</div><div class="adv-content" id="advHospital">—</div></div>
+      <div class="adv-card card"><div class="adv-card-title" style="color:var(--red)">❤ HEART ATTACK PRECAUTIONS</div><div class="adv-content" id="advHeart">—</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-report">
+  <div class="sec-hdr">
+    <div><div class="sec-title">REPORT</div><div class="sec-sub">Download PDF with current readings and health advice</div></div>
+    <button class="btn-primary" onclick="downloadPDF()">⬇ DOWNLOAD PDF</button>
+  </div>
+  <div id="reportNoData" class="card"><div class="no-data-msg">⚠️ No data to report yet.</div></div>
+  <div id="reportContent" style="display:none">
+    <div class="report-summary">
+      <div class="rep-box"><div class="rep-box-label">Heart Rate</div><div class="rep-box-val" id="repBpm" style="color:var(--cyan)">—</div><div class="rep-box-unit">BPM</div></div>
+      <div class="rep-box"><div class="rep-box-label">IBI</div><div class="rep-box-val" id="repIbi" style="color:var(--green)">—</div><div class="rep-box-unit">ms</div></div>
+      <div class="rep-box"><div class="rep-box-label">Total Beats</div><div class="rep-box-val" id="repBeats" style="color:var(--amber)">—</div><div class="rep-box-unit">detected</div></div>
+      <div class="rep-box"><div class="rep-box-label">Session Time</div><div class="rep-box-val" id="repTime" style="color:var(--purple)">—</div><div class="rep-box-unit">minutes</div></div>
+    </div>
+    <div class="card" id="reportPreview"><div class="card-title"><div class="dot" style="background:var(--amber)"></div>REPORT PREVIEW</div><div id="reportBody"></div></div>
+    <div class="card"><div class="card-title"><div class="dot" style="background:var(--cyan)"></div>ECG HISTORY</div><div id="reportEcgEmpty">No ECG data collected yet.</div><canvas id="reportEcgChart" style="width:100%;height:120px"></canvas></div>
+  </div>
+</div>
+
+</main>
+</div>
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false})},1000);
+
+function showPage(name, el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(el) el.classList.add('active');
+  if(name==='report') buildReport();
+  if(name==='advisor') updateAdvisor();
+}
+
+function toast(msg,type='info'){
+  const w=document.getElementById('toastWrap');
+  const d=document.createElement('div');
+  d.className='toast '+type;
+  d.textContent=msg;
+  w.appendChild(d);
+  setTimeout(()=>d.remove(),4500);
+}
+
+const state = {
+  bpm: null, ibi: null, beatCount: 0, signal: null,
+  ecgBuffer: [], ecgHistory: [], statusMsg: '',
+  mqttBroker: '', mqttTopic: '', sessionStart: null,
+  lastPulseTime: null, msgCount: 0
+};
+
+let ecgCtx = null, ecgAnimFrame = null;
+const ECG_MAX_POINTS = 300;
+let ecgPtsPerSec = 0, ecgPtsThisSec = 0, ecgSecTimer = Date.now();
+
+function initEcgCanvas(){
+  const canvas = document.getElementById('ecgCanvas');
+  if(!canvas) return;
+  canvas.width = canvas.offsetWidth || 800;
+  canvas.height = 120;
+  ecgCtx = canvas.getContext('2d');
+  drawECG();
+}
+
+function drawECG(){
+  ecgAnimFrame = requestAnimationFrame(drawECG);
+  if(!ecgCtx) return;
+  const W = ecgCtx.canvas.width, H = ecgCtx.canvas.height;
+  ecgCtx.clearRect(0,0,W,H);
+  ecgCtx.strokeStyle='rgba(0,229,255,0.05)'; ecgCtx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ecgCtx.beginPath();ecgCtx.moveTo(x,0);ecgCtx.lineTo(x,H);ecgCtx.stroke();}
+  for(let y=0;y<H;y+=20){ecgCtx.beginPath();ecgCtx.moveTo(0,y);ecgCtx.lineTo(W,y);ecgCtx.stroke();}
+  const pts = state.ecgBuffer;
+  if(pts.length < 2) return;
+  let min=pts[0],max=pts[0];
+  for(const v of pts){if(v<min)min=v;if(v>max)max=v;}
+  const range=max-min||1;
+  ecgCtx.strokeStyle='#00ff88'; ecgCtx.lineWidth=2;
+  ecgCtx.shadowBlur=8; ecgCtx.shadowColor='#00ff88';
+  ecgCtx.beginPath();
+  const step = W/(ECG_MAX_POINTS-1);
+  pts.forEach((v,i)=>{
+    const x=i*step, y=H-4-((v-min)/range)*(H-8);
+    i===0?ecgCtx.moveTo(x,y):ecgCtx.lineTo(x,y);
+  });
+  ecgCtx.stroke(); ecgCtx.shadowBlur=0;
+}
+
+function parseMessage(msg){
+  const str = typeof msg === 'string' ? msg : msg.toString();
+  state.msgCount++;
+  document.getElementById('sbMsgCount').textContent = state.msgCount;
+  document.getElementById('infoMsgCount').textContent = state.msgCount;
+  document.getElementById('infoLastMsg').textContent = str.length>60?str.slice(0,60)+'…':str;
+  ecgPtsThisSec++;
+  const now = Date.now();
+  if(now - ecgSecTimer >= 1000){
+    ecgPtsPerSec = ecgPtsThisSec;
+    document.getElementById('ecgHz').textContent = ecgPtsPerSec+' pts/s';
+    ecgPtsThisSec=0; ecgSecTimer=now;
+  }
+  if(str.startsWith('PULSE:')){
+    const parts = str.slice(6).split(',');
+    const bpm = parseInt(parts[0]);
+    const ibi = parts[1] ? parseInt(parts[1]) : null;
+    if(!isNaN(bpm) && bpm>0){
+      if(!state.sessionStart) state.sessionStart = Date.now();
+      state.bpm = bpm;
+      state.beatCount++;
+      state.lastPulseTime = Date.now();
+      if(ibi && !isNaN(ibi)) state.ibi = ibi;
+      updateBpmDisplay(bpm, ibi);
+    }
+  }
+  else if(str.startsWith('ECG:')){
+    const v = parseInt(str.slice(4));
+    if(!isNaN(v)){
+      state.signal = v;
+      state.ecgBuffer.push(v);
+      state.ecgHistory.push(v);
+      if(state.ecgBuffer.length > ECG_MAX_POINTS) state.ecgBuffer.shift();
+      const waiting = document.getElementById('ecgWaiting');
+      const canvas = document.getElementById('ecgCanvas');
+      if(waiting && waiting.style.display!=='none'){
+        waiting.style.display='none';
+        canvas.style.display='block';
+        initEcgCanvas();
+      }
+      document.getElementById('valSignal').textContent = v;
+      const sStatus = document.getElementById('statusSignal');
+      if(v > 20000) sStatus.textContent = '⬆ High signal';
+      else if(v < 5000) sStatus.textContent = '⬇ Low signal';
+      else sStatus.textContent = '✓ Good range';
+      document.getElementById('sensorDot').className='sdot on';
+      document.getElementById('sensorTxt').textContent='Sensor: ECG Active';
+    }
+  }
+  else if(str.startsWith('STATUS:')){
+    const msg = str.slice(7);
+    state.statusMsg = msg;
+    const bar = document.getElementById('statusMsgBar');
+    if(bar){ bar.textContent = '📟 STATUS: '+msg; bar.style.display='block'; }
+    if(msg.toLowerCase().includes('no finger')){
+      document.getElementById('sensorDot').className='sdot off';
+      document.getElementById('sensorTxt').textContent='Sensor: No finger';
+    } else if(msg.toLowerCase().includes('pulse measurement complete')){
+      document.getElementById('sensorDot').className='sdot on';
+      document.getElementById('sensorTxt').textContent='Sensor: ECG Active';
+    }
+  }
+}
+
+function updateBpmDisplay(bpm, ibi){
+  document.getElementById('valBpm').textContent = bpm;
+  if(ibi) document.getElementById('valIbi').textContent = ibi;
+  document.getElementById('valBeat').textContent = state.beatCount;
+  const beatBox = document.querySelector('.vbox.beat');
+  if(beatBox){ beatBox.classList.add('flash'); setTimeout(()=>beatBox.classList.remove('flash'),300); }
+  const bpmStatus = document.getElementById('statusBpm');
+  if(bpm < 50) bpmStatus.textContent='⬇ Bradycardia (low)';
+  else if(bpm < 60) bpmStatus.textContent='⬇ Below normal';
+  else if(bpm <= 100) bpmStatus.textContent='✓ Normal range';
+  else if(bpm <= 120) bpmStatus.textContent='⬆ Elevated';
+  else bpmStatus.textContent='⚠ Tachycardia (high)';
+  if(ibi){
+    const ibiStatus = document.getElementById('statusIbi');
+    if(ibi>600&&ibi<1000) ibiStatus.textContent='✓ Normal rhythm';
+    else if(ibi<=600) ibiStatus.textContent='⬆ Short interval';
+    else ibiStatus.textContent='⬇ Long interval';
+  }
+  document.getElementById('sbBpm').textContent = bpm+' BPM';
+  document.getElementById('liveChip').innerHTML='⬤ Live · BPM: '+bpm;
+}
+
+let mqttClient = null;
+function genClientId(){ let id='dashboard-'+Math.random().toString(36).substr(2,6); document.getElementById('cfgClientId').value=id; return id; }
+genClientId();
+
+function mqttConnect(){
+  const broker = document.getElementById('cfgBroker').value.trim() || 'broker.hivemq.com';
+  const port = parseInt(document.getElementById('cfgPort').value.trim()) || 8884;
+  const topic = document.getElementById('cfgTopic').value.trim() || 'health/patient/all';
+  const cid = document.getElementById('cfgClientId').value.trim();
+  const url = `wss://${broker}:${port}/mqtt`;
+  state.mqttBroker = broker; state.mqttTopic = topic;
+  document.getElementById('sbBroker').textContent = broker;
+  document.getElementById('sbTopic').textContent = topic;
+  document.getElementById('dashTopic').textContent = topic;
+  document.getElementById('infoBroker').textContent = broker;
+  document.getElementById('infoTopic').textContent = topic;
+  if(mqttClient) mqttClient.end(true);
+  mqttClient = mqtt.connect(url, { clientId: cid, clean: true, reconnectPeriod: 5000, connectTimeout: 12000 });
+  mqttClient.on('connect', ()=>{ mqttClient.subscribe(topic); setMqttOnline(true); toast('Connected to '+broker,'ok'); logEntry('CONNECTED to '+broker,'info'); });
+  mqttClient.on('message', (t,m)=>{ let str=m.toString(); logEntry('['+t+'] '+str,'info'); parseMessage(str); });
+  mqttClient.on('error', e=>{ setMqttOnline(false); toast('MQTT error','err'); });
+  mqttClient.on('close',()=>setMqttOnline(false));
+}
+
+function mqttDisconnect(){ if(mqttClient) mqttClient.end(); setMqttOnline(false); logEntry('Disconnected','warn'); toast('MQTT disconnected','warn'); }
+
+function setMqttOnline(on){
+  document.getElementById('mqttDot').className='sdot '+(on?'on':'off');
+  document.getElementById('mqttStatusTxt').textContent='MQTT: '+(on?'Connected':'Disconnected');
+  document.getElementById('infoStatus').textContent = on?'Connected':'Disconnected';
+  document.getElementById('infoStatus').style.color = on?'var(--green)':'var(--red)';
+  document.getElementById('connStatus').textContent = on?'Connected and subscribed':'Disconnected';
+  document.getElementById('connStatus').style.color = on?'var(--green)':'var(--red)';
+  document.getElementById('btnConnect').style.display = on?'none':'inline-block';
+  document.getElementById('btnDisconnect').style.display = on?'inline-block':'none';
+}
+
+function mqttPublish(){
+  if(!mqttClient||!mqttClient.connected){ toast('Not connected','err'); return; }
+  mqttClient.publish(document.getElementById('cfgTopic').value, document.getElementById('pubMsg').value);
+  toast('Published','ok');
+}
+
+function logEntry(text,type){
+  const el = document.getElementById('mqttLogBox');
+  if(!el) return;
+  const time = new Date().toLocaleTimeString('en-IN',{hour12:false});
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span style="color:var(--dim)">[${time}]</span> <span style="color:var(--cyan)">${text}</span>`;
+  if(el.firstChild && el.firstChild.textContent && el.firstChild.textContent.includes('No messages')) el.innerHTML='';
+  el.insertBefore(div, el.firstChild);
+  if(el.children.length > 200) el.removeChild(el.lastChild);
+}
+
+function clearLog(){ document.getElementById('mqttLogBox').innerHTML='<div style="color:var(--dim)">Log cleared.</div>'; }
+
+function generateESPCode(){
+  const ssid = document.getElementById('wifiSsidInput').value.trim();
+  const pass = document.getElementById('wifiPassInput').value;
+  const mqttBroker = document.getElementById('espBrokerInput').value.trim();
+  const mqttTopic = document.getElementById('espTopicInput').value.trim();
+  if(!ssid){ toast('Enter WiFi SSID','warn'); return; }
+  const code = `// ===== ESP8266 CONFIGURATION (Copy these lines to your sketch) =====
+#define WIFI_SSID     "${ssid}"
+#define WIFI_PASSWORD "${pass}"
+
+#define MQTT_BROKER   "${mqttBroker}"
+#define MQTT_PORT     1883
+
+#define MQTT_TOPIC_ALL   "${mqttTopic}"
+// ===== END CONFIGURATION =====`;
+  const outputDiv = document.getElementById('espCodeOutput');
+  outputDiv.textContent = code;
+  outputDiv.style.display = 'block';
+  toast('Configuration generated! Copy to your Arduino sketch.','ok');
+}
+
+function copyESPCode(){
+  const outputDiv = document.getElementById('espCodeOutput');
+  if(!outputDiv.style.display === 'block' || !outputDiv.textContent.trim()){ generateESPCode(); setTimeout(()=>copyESPCode(),100); return; }
+  navigator.clipboard.writeText(outputDiv.textContent).then(()=>toast('Copied to clipboard!','ok')).catch(()=>toast('Copy failed','err'));
+}
+
+function updateAdvisor(){
+  const bpm = state.bpm;
+  if(!bpm){ document.getElementById('advisorNoData').style.display='block'; document.getElementById('advisorContent').style.display='none'; return; }
+  document.getElementById('advisorNoData').style.display='none'; document.getElementById('advisorContent').style.display='block';
+  document.getElementById('advBpm').textContent=bpm; document.getElementById('advIbi').textContent=state.ibi||'—';
+  document.getElementById('advBeats').textContent=state.beatCount; document.getElementById('advSignal').textContent=state.signal||'—';
+  let category = (bpm>=60&&bpm<=100)?'Normal Sinus Rhythm':(bpm<60?'Bradycardia':'Tachycardia');
+  document.getElementById('advAssessment').textContent=category;
+  const items = (arr)=>arr.map(t=>`<div class="item">• ${t}</div>`).join('');
+  document.getElementById('advExercise').innerHTML = items(['Walk 30 min daily','Yoga breathing','Stay hydrated']);
+  document.getElementById('advDiet').innerHTML = items(['Reduce salt','Eat fiber-rich foods','Avoid caffeine']);
+  document.getElementById('advMeds').innerHTML = items(['Consult doctor before use','Take prescribed medications only']);
+  document.getElementById('advHospital').innerHTML = items(['Keep emergency contacts ready','Know nearest cardiac centre']);
+  document.getElementById('advHeart').innerHTML = items(['Monitor chest discomfort','Call emergency if symptoms appear']);
+}
+
+function buildReport(){
+  if(!state.bpm){ document.getElementById('reportNoData').style.display='block'; document.getElementById('reportContent').style.display='none'; return; }
+  document.getElementById('reportNoData').style.display='none'; document.getElementById('reportContent').style.display='block';
+  document.getElementById('repBpm').textContent=state.bpm; document.getElementById('repIbi').textContent=state.ibi||'—';
+  document.getElementById('repBeats').textContent=state.beatCount;
+  const mins = state.sessionStart?Math.round((Date.now()-state.sessionStart)/60000):0;
+  document.getElementById('repTime').textContent=mins;
+  document.getElementById('reportBody').innerHTML = `<div>Heart Rate: ${state.bpm} BPM</div><div>IBI: ${state.ibi||'N/A'} ms</div><div>Total Beats: ${state.beatCount}</div><div>Session: ${mins} minutes</div><div>Generated: ${new Date().toLocaleString()}</div>`;
+  if(state.ecgHistory.length>0){
+    document.getElementById('reportEcgEmpty').style.display='none';
+    const canvas = document.getElementById('reportEcgChart');
+    canvas.style.display='block';
+    canvas.width = canvas.offsetWidth||800; canvas.height=120;
+    const ctx = canvas.getContext('2d');
+    const pts = state.ecgHistory.slice(-200);
+    let mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||1;
+    ctx.clearRect(0,0,canvas.width,120);
+    ctx.strokeStyle='#00e5ff'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    pts.forEach((v,i)=>{ let x=(i/(pts.length-1))*canvas.width, y=120-4-((v-mn)/rng)*112; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.stroke();
+  }
+}
+
+function downloadPDF(){
+  if(!state.bpm){ toast('No data to download','err'); return; }
+  const html = `<html><head><title>Health Report</title><style>body{font-family:Arial;margin:40px}h1{color:#005a87}</style></head><body><h1>Patient Health Report</h1><p>Generated: ${new Date().toLocaleString()}</p><p>Heart Rate: ${state.bpm} BPM</p><p>IBI: ${state.ibi||'N/A'} ms</p><p>Total Beats: ${state.beatCount}</p><p>MQTT Broker: ${state.mqttBroker}</p><p>Topic: ${state.mqttTopic}</p></body></html>`;
+  const blob = new Blob([html],{type:'text/html'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`HealthReport_${new Date().toISOString().slice(0,10)}.html`; a.click(); toast('Report downloaded','ok');
+}
+</script>
+</body>
+</html>
